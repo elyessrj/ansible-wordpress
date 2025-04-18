@@ -1,0 +1,15 @@
+version: "3"
+services:
+  ubuntu:
+    build:
+      context: ./docker/ubuntu
+    ports:
+      - "2222:22"
+    hostname: ubuntu
+
+  rocky:
+    build:
+      context: ./docker/rocky
+    ports:
+      - "2223:22"
+    hostname: rocky

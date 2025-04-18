@@ -1,0 +1,10 @@
+---
+mariadb_root_password: examplerootPW
+
+wordpress_db_name: wpdb
+wordpress_db_user: wpuser
+wordpress_db_password: pass
+
+wordpress_url: http://localhost
+wordpress_dir: /var/www/html/wordpress
+wordpress_admin_email: admin@localhost

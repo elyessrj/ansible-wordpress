@@ -1,0 +1,129 @@
+---
+- name: Installer paquets sur Debian/Ubuntu
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  loop:
+    - apache2
+    - php
+    - php-mysql
+    - mariadb-server
+    - unzip
+    - wget
+  when: ansible_os_family == 'Debian'
+
+- name: Installer paquets sur Rocky Linux
+  yum:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - httpd
+    - php
+    - php-mysqlnd
+    - mariadb-server
+    - unzip
+    - wget
+  when: ansible_os_family == 'RedHat'
+
+- name: Supprimer la page index.html par défaut
+  file:
+    path: /var/www/html/index.html
+    state: absent
+
+- name: Démarrer et activer Apache
+  service:
+    name: "{{ apache_service }}"
+    state: started
+    enabled: true
+
+- name: Démarrer et activer MariaDB
+  service:
+    name: mariadb
+    state: started
+    enabled: true
+
+- name: Télécharger WordPress
+  get_url:
+    url: https://wordpress.org/latest.zip
+    dest: /tmp/wordpress.zip
+    mode: '0644'
+    force: yes
+
+- name: Décompresser WordPress
+  unarchive:
+    src: /tmp/wordpress.zip
+    dest: /var/www/html/
+    remote_src: yes
+    extra_opts: [--strip-components=1]
+
+- name: Changer les permissions du répertoire WordPress
+  file:
+    path: /var/www/html
+    owner: "{{ web_user }}"
+    group: "{{ web_user }}"
+    recurse: yes
+
+- name: Sécuriser MariaDB - Définir mot de passe root
+  mysql_user:
+    name: root
+    host: localhost
+    password: "{{ mariadb_root_password }}"
+    login_unix_socket: /var/run/mysqld/mysqld.sock
+  when: ansible_os_family == 'Debian'
+
+- name: Supprimer les utilisateurs anonymes
+  mysql_user:
+    name: ''
+    host_all: yes
+    state: absent
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+
+- name: Supprimer la base de test
+  mysql_db:
+    name: test
+    state: absent
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+
+- name: Créer la base de données WordPress
+  mysql_db:
+    name: "{{ wordpress_db_name }}"
+    state: present
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+
+- name: Créer l’utilisateur WordPress
+  mysql_user:
+    name: "{{ wordpress_db_user }}"
+    password: "{{ wordpress_db_password }}"
+    priv: "{{ wordpress_db_name }}.*:ALL"
+    host: localhost
+    state: present
+    login_user: root
+    login_password: "{{ mariadb_root_password }}"
+
+- name: Créer le fichier wp-config.php
+  template:
+    src: wp-config.php.j2
+    dest: /var/www/html/wp-config.php
+    owner: "{{ web_user }}"
+    group: "{{ web_user }}"
+    mode: '0640'
+
+- name: Créer le fichier VirtualHost Apache
+  template:
+    src: wordpress.conf.j2
+    dest: "{{ apache_vhost_path }}"
+  notify: Reload Apache
+
+- name: Activer le site WordPress sur Debian/Ubuntu
+  command: a2ensite wordpress.conf
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache
+
+- name: Activer le module rewrite (Debian)
+  command: a2enmod rewrite
+  when: ansible_os_family == 'Debian'
+  notify: Reload Apache
